@@ -10,9 +10,9 @@ func initGUI(msg *plat.JobMsg, jid int) error {
 }
 
 func GuiCtrl(msg *plat.JobMsg, jid int) error {
-	status := plat.GetStatus(jid)
+	status := plat.GetJobStatus(jid)
 	switch status {
-	case plat.JOB_INIT:
+	case plat.INIT_STATUS:
 		initGUI(msg, jid)
 	}
 

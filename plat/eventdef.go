@@ -1,0 +1,8 @@
+package plat
+
+const (
+	POWER_ON_EVENT = iota
+	PLAT_LOOP_EVENT
+	CREATE_TIMER_EVENT
+	KILL_TIMER_EVENT
+)
