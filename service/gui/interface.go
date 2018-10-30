@@ -1,7 +1,7 @@
 package gui
 
 import "log"
-import "github.com/skyismine2010/ATT/plat"
+import "github.com/skyismine2010/testtool/plat"
 
 func initGUI(msg *plat.JobMsg, jid int) error {
 	log.Printf("receive ")
