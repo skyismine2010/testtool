@@ -1,9 +1,9 @@
 package plat
 
 import (
-	"fmt"
 	"log"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -13,9 +13,9 @@ const (
 )
 
 type JobMsg struct {
-	msgType int
-	msgLen  int
-	msg     []byte
+	EventType int
+	msgLen    int
+	msg       []byte
 }
 
 type JobEntryReg struct {
@@ -63,26 +63,24 @@ func InitPlat(entrys []*JobEntryReg) error {
 func jobEntry(job *JobEntryReg) {
 	for {
 		msg := <-job.MsgChan
-		err := job.ServiceEntry(&msg, job.Jid)
+		err := job.ServiceEntry(&msg, job.Status)
 		if err != nil {
 			log.Printf("service %v get erorr, error: %v", job.Name, err)
 		}
 	}
 }
 
-func SendAsyncMsgByJid(jId int, msg *JobMsg) error {
+func SendAsyncMsgByJid(jId int, msg *JobMsg) {
 	entry, ok := g_JobMap[jId]
 	if !ok {
-		return fmt.Errorf("Can't find error")
+		log.Printf("Can't find error")
+		return
 	}
 	entry.MsgChan <- *msg
-
-	return nil
 }
 
 func SendAsyncBroadcastMsg(msg *JobMsg) error {
 	for _, entry := range g_JobEntry {
-		log.Printf("send msg to %v, chan =%v", entry.Name, entry.MsgChan)
 		entry.MsgChan <- *msg
 	}
 	return nil
@@ -103,4 +101,30 @@ func SetJobStatus(jid int, status int) {
 		return
 	}
 	entry.Status = status
+}
+
+func sendMsg2TimerCtrl(event *JobTimerEvent) {
+	eventLen := unsafe.Sizeof(*event)
+	jobMsg := JobMsg{CREATE_TIMER_EVENT, int(eventLen), *(*[]byte)(unsafe.Pointer(event))}
+	SendAsyncMsgByJid(TIMER_CTRL_JID, &jobMsg)
+
+}
+
+func SetRelativeTimer(timerID int, during time.Duration, jId int) {
+	event := JobTimerEvent{timerID,
+		JobTimer{jId, RELATIVE_TIMER, during, during},
+	}
+	sendMsg2TimerCtrl(&event)
+}
+
+func SetLoopTimer(timerID int, during time.Duration, jId int) {
+	event := JobTimerEvent{timerID,
+		JobTimer{jId, LOOP_TIMER, during, during},
+	}
+	sendMsg2TimerCtrl(&event)
+
+}
+
+func KillTimer(timerID int) {
+
 }

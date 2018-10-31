@@ -2,31 +2,34 @@ package plat
 
 //todo: 这里准备使用一个container/heap 来实现比较合理
 import (
+	"fmt"
 	"log"
 	"time"
+	"unsafe"
 )
 
 const (
-	selfJId = 1
+	precision = 10 * time.Millisecond
 )
 
-type jobTimer struct {
-	jid    int
-	during time.Duration
+const (
+	RELATIVE_TIMER = iota
+	LOOP_TIMER
+)
+
+type JobTimer struct {
+	jid         int
+	timerType   byte
+	restDuring  time.Duration
+	totalDuring time.Duration
 }
 
-var timerMap map[int]jobTimer
-
-func SetRelativeTimer() {
-
+type JobTimerEvent struct {
+	timerId  int
+	jobTimer JobTimer
 }
 
-func SetLoopTimer() {
-}
-
-func KillTimer() {
-
-}
+var timerMap map[int]*JobTimer
 
 func timerLoopDemo(during time.Duration) {
 	ticker := time.NewTicker(during)
@@ -39,33 +42,80 @@ func timerLoopDemo(during time.Duration) {
 				0,
 				nil,
 			}
-			SendAsyncMsgByJid(selfJId, &msg)
+			SendAsyncMsgByJid(TIMER_CTRL_JID, &msg)
 		}
 	}
 
 }
 
 func TimerInit() {
-	timerMap = make(map[int]jobTimer)
+	timerMap = make(map[int]*JobTimer) //todo: 这里要换成一个最小堆来实现
 	log.Printf("Timer Ctrl receive Init message, prepared to power on.")
-	SetJobStatus(selfJId, WORK_STATUS)
-	go timerLoopDemo(100 * time.Millisecond)
+	SetJobStatus(TIMER_CTRL_JID, WORK_STATUS)
+	go timerLoopDemo(precision)
+}
+
+func sendTimerOutEvent(timerid int, timer *JobTimer) {
+	msg := JobMsg{timerid, 0, nil}
+	SendAsyncMsgByJid(timer.jid, &msg)
+}
+
+func createTimer(msg *JobMsg) error {
+
+	pJobTimerEvent := *(*JobTimerEvent)(unsafe.Pointer(msg))
+	timerId := pJobTimerEvent.timerId
+	if _, ok := timerMap[timerId]; ok {
+		return fmt.Errorf("timerid=%d already exist.", timerId)
+	}
+	timerMap[timerId] = &pJobTimerEvent.jobTimer
+	return nil
+}
+
+func killTimer(msg *JobMsg) error {
+	pJobTimerEvent := *(**JobTimerEvent)(unsafe.Pointer(msg))
+	timerId := pJobTimerEvent.timerId
+	if _, ok := timerMap[timerId]; !ok {
+		return fmt.Errorf("timerid=%d does't exist.", timerId)
+	}
+
+	delete(timerMap, timerId)
+	return nil
 }
 
 func TimerCtrl(msg *JobMsg, status int) error {
-	switch GetJobStatus(selfJId) {
+	switch status {
 	case INIT_STATUS:
 		TimerInit()
 	case WORK_STATUS:
 		{
-			switch msg.msgType {
+			switch msg.EventType {
 			case PLAT_LOOP_EVENT:
+				for timerId, jobTimer := range timerMap {
+					jobTimer.restDuring -= precision
+					log.Printf("scane timer=%d, rest during=%v", timerId, jobTimer.restDuring)
+					if jobTimer.restDuring <= 0 {
+						sendTimerOutEvent(timerId, jobTimer)
+						if jobTimer.timerType == LOOP_TIMER {
+							jobTimer.restDuring = jobTimer.totalDuring
+						} else {
+							delete(timerMap, timerId)
+						}
 
-				log.Printf("go here now!")
+					}
+				}
+
 			case CREATE_TIMER_EVENT:
-				log.Printf("go here now!")
+				err := createTimer(msg)
+				if err != nil {
+					log.Printf("Create Timer failed, err=%v", err)
+					return err
+				}
 			case KILL_TIMER_EVENT:
-				log.Printf("go here now!")
+				err := killTimer(msg)
+				if err != nil {
+					log.Printf("kill Timer failed, err=%v", err)
+					return err
+				}
 			}
 		}
 	}

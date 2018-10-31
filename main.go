@@ -10,7 +10,7 @@ import (
 
 var JobEntry = []*plat.JobEntryReg{
 	/*平台Job*/
-	&plat.JobEntryReg{1, "Timer", plat.INIT_STATUS, 1024, plat.TimerCtrl, nil},
+	&plat.JobEntryReg{plat.TIMER_CTRL_JID, "Timer", plat.INIT_STATUS, 1024, plat.TimerCtrl, nil},
 
 	/*业务job*/
 	&plat.JobEntryReg{5001, "TaskExec", plat.INIT_STATUS, 1024, taskexec.TaskExecCtrl, nil},
