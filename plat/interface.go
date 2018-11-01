@@ -1,9 +1,10 @@
 package plat
 
 import (
+	"bytes"
+	"encoding/binary"
 	"log"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -13,27 +14,26 @@ const (
 )
 
 type JobMsg struct {
-	EventType int
-	msgLen    int
+	EventType int32
 	msg       []byte
 }
 
 type JobEntryReg struct {
-	Jid          int
+	Jid          int32
 	Name         string
-	Status       int
-	BuffSize     int
-	ServiceEntry func(msg *JobMsg, jid int) error
+	Status       int32
+	BuffSize     int32
+	ServiceEntry func(msg *JobMsg, status int32) error
 	//Lock         sync.Mutex
 	MsgChan chan JobMsg
 }
 
-var g_JobMap map[int](*JobEntryReg)
+var g_JobMap map[int32](*JobEntryReg)
 var g_JobEntry []*JobEntryReg
 
 func InitPlat(entrys []*JobEntryReg) error {
 	g_JobEntry = entrys
-	g_JobMap = make(map[int](*JobEntryReg), len(entrys))
+	g_JobMap = make(map[int32](*JobEntryReg), len(entrys))
 
 	for _, entry := range entrys {
 		entry.MsgChan = make(chan JobMsg, entry.BuffSize)
@@ -48,13 +48,12 @@ func InitPlat(entrys []*JobEntryReg) error {
 
 	msg := JobMsg{
 		POWER_ON_EVENT,
-		0,
 		nil,
 	}
 	log.Printf("Sending power on msg to all job begin!")
 	SendAsyncBroadcastMsg(&msg)
 	log.Printf("Sending power on msg to all job finish!")
-	time.Sleep(100 * time.Second)
+	time.Sleep(10000 * time.Second)
 	log.Printf("Finish....")
 
 	return nil
@@ -70,10 +69,10 @@ func jobEntry(job *JobEntryReg) {
 	}
 }
 
-func SendAsyncMsgByJid(jId int, msg *JobMsg) {
+func SendAsyncMsgByJid(jId int32, msg *JobMsg) {
 	entry, ok := g_JobMap[jId]
 	if !ok {
-		log.Printf("Can't find error")
+		log.Printf("Can't find error Jid=%d", jId)
 		return
 	}
 	entry.MsgChan <- *msg
@@ -86,7 +85,7 @@ func SendAsyncBroadcastMsg(msg *JobMsg) error {
 	return nil
 }
 
-func GetJobStatus(jid int) int {
+func GetJobStatus(jid int32) int32 {
 	entry, ok := g_JobMap[jid]
 	if !ok {
 		return UNKNOWN_STATUS
@@ -94,37 +93,39 @@ func GetJobStatus(jid int) int {
 	return entry.Status
 }
 
-func SetJobStatus(jid int, status int) {
+func SetJobStatus(jid int32, status int32) {
 	entry, ok := g_JobMap[jid]
 	if !ok {
-		log.Printf("Can't find jid = %d", jid)
+		log.Printf("Can't find Jid = %d", jid)
 		return
 	}
 	entry.Status = status
 }
 
 func sendMsg2TimerCtrl(event *JobTimerEvent) {
-	eventLen := unsafe.Sizeof(*event)
-	jobMsg := JobMsg{CREATE_TIMER_EVENT, int(eventLen), *(*[]byte)(unsafe.Pointer(event))}
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, binary.BigEndian, *event)
+	if err != nil {
+		log.Printf("Can't write to Buffer. err=%v", err)
+	}
+	log.Printf("Write to Buffer, buff=% x", buff.Bytes())
+	jobMsg := JobMsg{CREATE_TIMER_EVENT, buff.Bytes()}
 	SendAsyncMsgByJid(TIMER_CTRL_JID, &jobMsg)
 
 }
 
-func SetRelativeTimer(timerID int, during time.Duration, jId int) {
-	event := JobTimerEvent{timerID,
-		JobTimer{jId, RELATIVE_TIMER, during, during},
-	}
+func SetRelativeTimer(timerID int32, during time.Duration, jId int32) {
+	event := JobTimerEvent{timerID, JobTimer{
+		jId, RELATIVE_TIMER, during, during}}
 	sendMsg2TimerCtrl(&event)
 }
 
-func SetLoopTimer(timerID int, during time.Duration, jId int) {
-	event := JobTimerEvent{timerID,
-		JobTimer{jId, LOOP_TIMER, during, during},
-	}
+func SetLoopTimer(timerID int32, during time.Duration, jId int32) {
+	event := JobTimerEvent{timerID, JobTimer{
+		jId, LOOP_TIMER, during, during}}
 	sendMsg2TimerCtrl(&event)
 
 }
 
 func KillTimer(timerID int) {
-
 }
