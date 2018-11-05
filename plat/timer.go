@@ -62,8 +62,7 @@ func sendTimerOutEvent(timerid int32, timer *JobTimer) {
 
 func insert2TimerMap(msg *JobMsg) error {
 	var event JobTimerEvent
-	log.Printf("Receive Create job msg. msg=%v", msg.msg)
-	reader := bytes.NewReader(msg.msg)
+	reader := bytes.NewReader(msg.MsgBuff)
 	binary.Read(reader, binary.BigEndian, &event)
 	timerId := event.TimerId
 
@@ -76,7 +75,7 @@ func insert2TimerMap(msg *JobMsg) error {
 
 func removeFromTimeMap(msg *JobMsg) error {
 	var event JobTimerEvent
-	reader := bytes.NewReader(msg.msg)
+	reader := bytes.NewReader(msg.MsgBuff)
 	binary.Read(reader, binary.LittleEndian, &event)
 	timerId := event.TimerId
 	if _, ok := timerMap[timerId]; !ok {

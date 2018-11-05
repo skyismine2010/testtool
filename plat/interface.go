@@ -15,7 +15,7 @@ const (
 
 type JobMsg struct {
 	EventType int32
-	msg       []byte
+	MsgBuff   []byte
 }
 
 type JobEntryReg struct {
@@ -50,9 +50,9 @@ func InitPlat(entrys []*JobEntryReg) error {
 		POWER_ON_EVENT,
 		nil,
 	}
-	log.Printf("Sending power on msg to all job begin!")
+	log.Printf("Sending power on MsgBuff to all job begin!")
 	SendAsyncBroadcastMsg(&msg)
-	log.Printf("Sending power on msg to all job finish!")
+	log.Printf("Sending power on MsgBuff to all job finish!")
 	time.Sleep(10000 * time.Second)
 	log.Printf("Finish....")
 
@@ -108,10 +108,8 @@ func sendMsg2TimerCtrl(event *JobTimerEvent) {
 	if err != nil {
 		log.Printf("Can't write to Buffer. err=%v", err)
 	}
-	log.Printf("Write to Buffer, buff=% x", buff.Bytes())
 	jobMsg := JobMsg{CREATE_TIMER_EVENT, buff.Bytes()}
 	SendAsyncMsgByJid(TIMER_CTRL_JID, &jobMsg)
-
 }
 
 func SetRelativeTimer(timerID int32, during time.Duration, jId int32) {
